@@ -9,7 +9,7 @@ class Node:
         self.valueOfSelection = -1.0        # This is value of seperator. We will compare with this when predicting.
         self.giniValue = 1                  # This is gini impurity of the node. If it is 0, then it is leaf node.
         self.countOfSpecies = [-1, -1, -1]
-        self.classOfSpecies = "Unassigned!"
+        self.classOfSpecies = -1
         self.isLeaf = False
         self.depthOfNode = depthOfNode
         self.parent = parent
@@ -93,13 +93,13 @@ class DecisionTreeClassifier:
         node.isLeaf = isLeaf
         if(node.countOfSpecies[0] > node.countOfSpecies[1]):
             if(node.countOfSpecies[0] > node.countOfSpecies[2]):
-                node.classOfSpecies = "Setosa"
+                node.classOfSpecies = 0
             else:
-                node.classOfSpecies = "Virginica"
+                node.classOfSpecies = 2
         elif(node.countOfSpecies[1] > node.countOfSpecies[0] and node.countOfSpecies[1] > node.countOfSpecies[2]):
-            node.classOfSpecies = "Versicolor"
+            node.classOfSpecies = 1
         else:
-            node.classOfSpecies = "Setosa"
+            node.classOfSpecies = 0
     #endregion
 
     def fit(self, X: List[List[float]], y: List[int]):
@@ -136,7 +136,17 @@ class DecisionTreeClassifier:
 
 
     def predict(self, X: List[List[float]]):
-        pass
+        self.currentNode = self.root
+        result = []
+        for row in X:
+            while self.currentNode.isLeaf == False:
+                if X[self.currentNode.featureOfSelection] <= self.currentNode.valueOfSelection:
+                    self.currentNode = self.currentNode.leftChild
+                else:
+                    self.currentNode = self.currentNode.rightChild
+            result.insert(self.currentNode.classOfSpecies)
+        return result
+                 
 
 
 
