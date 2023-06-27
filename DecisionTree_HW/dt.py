@@ -3,8 +3,8 @@ from typing import List
 # If the answer is yes, go to left; else go right.
 # If you reach a leaf then it means prediction is over.
 class Node:
-    maxDepth = 0
-    def __init__(self, inputMaxDepth: int = 0, depthOfNode: int = 0, parent = None):
+    maxDepth = -1
+    def __init__(self, depthOfNode: int = 0, parent: "Node" = None):
         self.featureOfSelection = -1        # This is index of column of original train set. ID is dropped.
         self.valueOfSelection = -1.0        # This is value of seperator. We will compare with this when predicting.
         self.giniValue = 1                  # This is gini impurity of the node. If it is 0, then it is leaf node.
@@ -15,12 +15,12 @@ class Node:
         self.parent = parent
         self.leftChild = None
         self.rightChild = None
-        if(parent is None):
-            self.maxDepth = inputMaxDepth
+
 
 class DecisionTreeClassifier:
     def __init__(self, max_depth: int):
-        self.root = Node(inputMaxDepth=max_depth)
+        self.root = Node()
+        self.root.maxDepth = max_depth
         self.currentNode = self.root
 
     #region Functions for fit function.
@@ -45,7 +45,7 @@ class DecisionTreeClassifier:
         return [numberOf0, numberOf1, numberOf2]
 
     def GiniImpurityCalculationForTheNode(self, y: List[int], curretnCountInstance: int):
-        numberOfSpecies = self.NumberOfSpeciesInTheNode(self, y)
+        numberOfSpecies = self.NumberOfSpeciesInTheNode(y)
         Species0Probability = numberOfSpecies[0] / curretnCountInstance
         Species1Probability = numberOfSpecies[1] / curretnCountInstance
         Species2Probability = numberOfSpecies[2] / curretnCountInstance
@@ -57,13 +57,13 @@ class DecisionTreeClassifier:
         right_train = []
         right_target = []
         keyValue = X[rowIndexOfInstance][feature]
-        for row in X:
-            if(X[row][feature] <= keyValue):
-                left_train.insert(X[row])
-                left_target.insert(y[row])
+        for rowIndex in range(0, len(X)):
+            if(X[rowIndex][feature] <= keyValue):
+                left_train.append(X[rowIndex])
+                left_target.append(y[rowIndex])
             else:
-                right_train.insert(X[row])
-                right_target.insert(y[row])
+                right_train.append(X[rowIndex])
+                right_target.append(y[rowIndex])
         return left_train, left_target, right_train, right_target
     
     def findOptimalSplit(self, X: List[List[float]], y: List[int], curretnCountInstance: int):
@@ -72,12 +72,12 @@ class DecisionTreeClassifier:
         rowOfMin = -1
         for feature in range(0,4):
             for row in range(len(y)):
-                left_train, left_target, right_train, right_target = self.splitCurrentNode(self, feature, row, X, y)
+                left_train, left_target, right_train, right_target = self.splitCurrentNode(feature, row, X, y)
                 # If any split won't happen, then that split has no meaning, need to continue to search.
-                if(self.CheckInputFit(self, left_target, left_train) or self.CheckInputFit(self, right_target, right_train)):
+                if(self.CheckInputFit(left_target, left_train) or self.CheckInputFit(right_target, right_train)):
                     continue
-                leftGini = self.GiniImpurityCalculationForTheNode(self, left_target, len(left_target))
-                rightGini = self.GiniImpurityCalculationForTheNode(self, right_target, len(right_target))
+                leftGini = self.GiniImpurityCalculationForTheNode(left_target, len(left_target))
+                rightGini = self.GiniImpurityCalculationForTheNode(right_target, len(right_target))
                 weightedGini = leftGini * (len(left_target) / curretnCountInstance) + rightGini * (len(right_target) / curretnCountInstance)
                 if(weightedGini < minWeightedGini):
                     feauterOfMin = feature
@@ -89,77 +89,62 @@ class DecisionTreeClassifier:
         node.featureOfSelection = featureOfSelection
         node.valueOfSelection = valueOfSelection
         node.giniValue = giniValue
-        node.countOfSpecies = self.NumberOfSpeciesInTheNode(self, y)
+        node.countOfSpecies = self.NumberOfSpeciesInTheNode(y)
         node.isLeaf = isLeaf
-        if(node.countOfSpecies[0] > node.countOfSpecies[1]):
-            if(node.countOfSpecies[0] > node.countOfSpecies[2]):
-                node.classOfSpecies = 0
-            else:
-                node.classOfSpecies = 2
-        elif(node.countOfSpecies[1] > node.countOfSpecies[0] and node.countOfSpecies[1] > node.countOfSpecies[2]):
-            node.classOfSpecies = 1
-        else:
+        if(node.countOfSpecies[0] >= node.countOfSpecies[1] and node.countOfSpecies[0] >= node.countOfSpecies[2]):
             node.classOfSpecies = 0
+        elif(node.countOfSpecies[1] >= node.countOfSpecies[0] and node.countOfSpecies[1] >= node.countOfSpecies[2]):
+            node.classOfSpecies = 1
+        elif(node.countOfSpecies[2] >= node.countOfSpecies[0] and node.countOfSpecies[2] >= node.countOfSpecies[1]):
+            node.classOfSpecies = 2
+        else:
+            node.classOfSpecies = 2
     #endregion
 
     def fit(self, X: List[List[float]], y: List[int]):
-        if(self.CheckInputFit(self, X, y)):
+        if(self.CheckInputFit(X, y)):
             print("Wrong Input!")
             return
         curretnCountInstance = len(y)
-        initialGiniImpurity = self.GiniImpurityCalculationForTheNode(self, y, curretnCountInstance)
+        initialGiniImpurity = self.GiniImpurityCalculationForTheNode(y, curretnCountInstance)
         
         if(initialGiniImpurity == 0):
-            self.saveNode(self, self.currentNode, -1, -1, initialGiniImpurity, y, True, self.root.maxDepth)
+            self.saveNode(self.currentNode, -1, -1, initialGiniImpurity, y, True)
             return
         # Continue to create new nodes for decision tree.
-        feauterOfMin, rowOfMin = self.findOptimalSplit(self, X, y, curretnCountInstance)
+        feauterOfMin, rowOfMin = self.findOptimalSplit(X, y, curretnCountInstance)
         #Saving the findings.
-        if(self.currentNode.depthOfNode == 5):
-            self.saveNode(self, self.currentNode, feauterOfMin, X[rowOfMin][feauterOfMin], y, True)
+        if(self.currentNode.depthOfNode == self.currentNode.maxDepth):
+            self.saveNode(self.currentNode, feauterOfMin, X[rowOfMin][feauterOfMin], initialGiniImpurity, y, True)
             return
-        self.saveNode(self, self.currentNode, feauterOfMin, X[rowOfMin][feauterOfMin], y, False)
+        self.saveNode(self.currentNode, feauterOfMin, X[rowOfMin][feauterOfMin], initialGiniImpurity, y, False)
         left_train, left_target, right_train, right_target = self.splitCurrentNode(feauterOfMin, rowOfMin, X, y)
 
-        temp_node = Node(selfdepthOfNode=self.currentNode.depthOfNode + 1, parent=self.currentNode)
+        temp_node = Node(depthOfNode=self.currentNode.depthOfNode + 1, parent=self.currentNode)
         self.currentNode.leftChild = temp_node
         self.currentNode = self.currentNode.leftChild
         self.fit(left_train, left_target)
 
-        self.currentNode = self.currentNode.parent
+        self.currentNode = self.currentNode.parent  #To go to right child.
         temp_node = Node(depthOfNode=self.currentNode.depthOfNode + 1, parent=self.currentNode)
         self.currentNode.rightChild = temp_node
-        self.currentNode = self.currentNode
+        self.currentNode = self.currentNode.rightChild
         self.fit(right_train, right_target)
-        
+        self.currentNode = self.currentNode.parent  #To go upper for continue to iterating.
 
 
 
     def predict(self, X: List[List[float]]):
-        self.currentNode = self.root
         result = []
         for row in X:
-            while self.currentNode.isLeaf == False:
-                if X[self.currentNode.featureOfSelection] <= self.currentNode.valueOfSelection:
+            self.currentNode = self.root
+            while(self.currentNode.isLeaf == False):
+                if(row[self.currentNode.featureOfSelection] <= self.currentNode.valueOfSelection):
                     self.currentNode = self.currentNode.leftChild
                 else:
                     self.currentNode = self.currentNode.rightChild
-            result.insert(self.currentNode.classOfSpecies)
+            result.append(self.currentNode.classOfSpecies)
         return result
-                 
-
-
-
-
-
-# if __name__ == '__main__':  
-    # X, y = ...
-    # X_train, X_test, y_train, y_test = ...
-
-    # clf = DecisionTreeClassifier(max_depth=5)
-    # clf.fit(X_train, y_train)
-    # yhat = clf.predict(X_test)   
-
 
 
 
